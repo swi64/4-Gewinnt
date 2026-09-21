@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>4 Gewinnt Online & Offline</title>
+    <!-- PeerJS für Online-Multiplayer -->
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <!-- Canvas Confetti für Sieg-Animationen -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #130826;
+            --panel-bg: rgba(31, 13, 61, 0.9);
+            --panel-border: rgba(243, 156, 18, 0.3);
+            --text-color: #f39c12;
+            --text-light: #ffffff;
+            --accent-orange: #ff9f0a;
+            --accent-gold: #f39c12;
+            --btn-hover: #e67e22;
+            --board-bg: #1a0b36;
+            --slot-bg: #0d051c;
+            --player1: #e74c3c; /* Rot */
+            --player2: #f1c40f; /* Gelb / Gold */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at center, #230d4a 0%, #130826 100%);
+            color: var(--text-light);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+            padding: 10px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: var(--panel-bg);
+            border: 2px solid var(--panel-border);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(10px);
+            text-align: center;
+        }
+
+        /* Für die Spielansicht nutzen wir fast die komplette Handy-Breite aus */
+        #game-screen.screen.active {
+            max-width: 100%;
+            width: 100%;
+            padding: 10px;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            backdrop-filter: none;
+        }
+
+        h1 {
+            color: var(--accent-gold);
+            font-size: 2rem;
+            margin-bottom: 15px;
+            text-shadow: 0 2px 5px rgba(243, 156, 18, 0.4);
+        }
+
+        h2 {
+            color: var(--accent-orange);
+            font-size: 1.4rem;
+            margin-bottom: 15px;
+        }
+
+        p {
+            color: #d1c4e9;
+            margin-bottom: 15px;
+            font-size: 1rem;
+            line-height: 1.5;
+        }
+
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent-orange), var(--accent-gold));
+            color: #130826;
+            border: none;
+            padding: 14px 28px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);
+            margin: 10px 5px;
+            display: inline-block;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(243, 156, 18, 0.5);
+            background: linear-gradient(135deg, #f39c12, #d35400);
+            color: var(--text-light);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            border: 2px solid var(--accent-orange);
+            color: var(--accent-orange);
+        }
+
+        .btn-secondary:hover {
+            background: var(--accent-orange);
+            color: #130826;
+        }
+
+        .btn-whatsapp {
+            background: #25D366;
+            color: white;
+            box-shadow: 0 4px 15px rgba(37, 211, 102, 0.3);
+        }
+
+        .btn-whatsapp:hover {
+            background: #1ebe5d;
+            color: white;
+            box-shadow: 0 6px 20px rgba(37, 211, 102, 0.5);
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px 20px;
+            background: rgba(13, 5, 28, 0.8);
+            border: 2px solid var(--panel-border);
+            border-radius: 10px;
+            color: var(--text-light);
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--accent-orange);
+        }
+
+        /* Spielstatus-Leiste */
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            background: rgba(31, 13, 61, 0.9);
+            padding: 10px 15px;
+            border-radius: 12px;
+            border: 1px solid var(--panel-border);
+        }
+
+        .turn-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .mini-disc {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .mini-disc.p1 { background-color: var(--player1); box-shadow: 0 0 8px var(--player1); }
+        .mini-disc.p2 { background-color: var(--player2); box-shadow: 0 0 8px var(--player2); }
+
+        /* Spielfeld füllt die Handy-Breite optimal aus und hat größere Schlitze */
+        .board-container {
+            position: relative;
+            background-color: var(--board-bg);
+            border: 4px solid var(--accent-orange);
+            border-radius: 16px;
+            padding: 8px;
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 6px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+            margin-bottom: 15px;
+            width: 100%;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .column {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            cursor: pointer;
+        }
+
+        .column:hover .slot {
+            border-color: rgba(255, 159, 10, 0.6);
+        }
+
+        .slot {
+            width: 100%;
+            aspect-ratio: 1;
+            background-color: var(--slot-bg);
+            border-radius: 50%;
+            border: 2px solid rgba(243, 156, 18, 0.25);
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 5px 8px rgba(0,0,0,0.9);
+            transition: border-color 0.2s;
+        }
+
+        .disc {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transform: translateY(-400px);
+            animation: dropDisc 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+            box-shadow: inset 0 -5px 10px rgba(0,0,0,0.5), 0 0 12px rgba(0,0,0,0.4);
+        }
+
+        .disc.p1 {
+            background: radial-gradient(circle at 35% 35%, #ff6b6b, var(--player1));
+        }
+
+        .disc.p2 {
+            background: radial-gradient(circle at 35% 35%, #ffeaa7, var(--player2));
+        }
+
+        .disc.winner {
+            animation: pulseWinner 1s infinite alternate;
+        }
+
+        @keyframes dropDisc {
+            0% { transform: translateY(-400px); opacity: 0; }
+            60% { transform: translateY(10px); opacity: 1; }
+            80% { transform: translateY(-5px); }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+
+        @keyframes pulseWinner {
+            0% { transform: scale(1); filter: brightness(1); }
+            100% { transform: scale(1.08); filter: brightness(1.3); box-shadow: 0 0 20px #fff; }
+        }
+
+        .link-box {
+            background: rgba(13, 5, 28, 0.9);
+            border: 1px dashed var(--accent-orange);
+            padding: 12px;
+            border-radius: 8px;
+            word-break: break-all;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: var(--accent-orange);
+            margin-bottom: 15px;
+            user-select: all;
+        }
+
+        .status-msg {
+            font-size: 1.1rem;
+            color: var(--accent-gold);
+            margin: 10px 0;
+            font-weight: bold;
+        }
+
+        .menu-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .back-btn {
+            background: transparent;
+            border: none;
+            color: #d1c4e9;
+            cursor: pointer;
+            font-size: 0.95rem;
+            margin-top: 15px;
+            text-decoration: underline;
+        }
+        .back-btn:hover {
+            color: var(--accent-orange);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- 1. HAUPTMENÜ -->
+        <div id="main-menu" class="screen active">
+            <h1>4 GEWINNT</h1>
+            <p>Wähle deinen Spielmodus und verbinde dich mit Freunden oder der KI im edlen Look.</p>
+            <div class="menu-grid">
+                <button class="btn" onclick="showScreen('mode-online-choice')">🌐 Online-Duell</button>
+                <button class="btn" onclick="showScreen('mode-ai-choice')">🤖 Gegen die KI</button>
+                <button class="btn btn-secondary" onclick="startLocalGame()">👥 Lokaler Modus (2 Spieler)</button>
+            </div>
+        </div>
+
+        <!-- 2. ONLINE AUSWAHL (Hosten oder Beitreten) -->
+        <div id="mode-online-choice" class="screen">
+            <h1>Online-Duell</h1>
+            <p>Spiele in Echtzeit gegen Freunde – egal ob über WhatsApp, Direktlink oder Raumcode.</p>
+            <div class="menu-grid">
+                <button class="btn" onclick="prepareHostScreen()">🏠 Raum erstellen (Host)</button>
+                <button class="btn btn-secondary" onclick="showScreen('mode-online-join')">🔗 Raum beitreten</button>
+            </div>
+            <button class="back-btn" onclick="showScreen('main-menu')">⬅ Zurück zum Hauptmenü</button>
+        </div>
+
+        <!-- 3. ONLINE RAUM ERSTELLEN & WUNSCH-CODE -->
+        <div id="mode-online-host-setup" class="screen">
+            <h1>Raum erstellen</h1>
+            <p>Wähle einen eigenen Raumcode oder generiere automatisch einen zufälligen Code:</p>
+            
+            <input type="text" id="custom-room-input" placeholder="z.B. stefan-duell" autocomplete="off">
+            
+            <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 15px;">
+                <button class="btn" onclick="startHosting()">Raum öffnen</button>
+                <button class="btn btn-secondary" onclick="fillRandomCode()">🎲 Zufalls-Code</button>
+            </div>
+
+            <button class="back-btn" onclick="showScreen('mode-online-choice')">⬅ Zurück</button>
+        </div>
+
+        <!-- 4. ONLINE WARTERAUM & TEILEN -->
+        <div id="mode-online-host" class="screen">
+            <h1>Warte auf Mitspieler</h1>
+            <p>Teile den Link oder den Code mit deinem Mitspieler, um das Duell zu starten:</p>
+            
+            <div class="link-box" id="room-link-display">Generiere Link...</div>
+            
+            <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 15px;">
+                <button class="btn btn-whatsapp" id="whatsapp-btn" onclick="shareViaWhatsApp()">📲 Per WhatsApp einladen</button>
+                <button class="btn btn-secondary" onclick="copyRoomLink()">📋 Link kopieren</button>
+            </div>
+
+            <div class="status-msg" id="host-status">Warte auf Mitspieler...</div>
+            <button class="back-btn" onclick="confirmExitToMenu()">Abbrechen</button>
+        </div>
+
+        <!-- 5. ONLINE BEITRETEN -->
+        <div id="mode-online-join" class="screen">
+            <h1>Raum beitreten</h1>
+            <p>Gib den Raumcode ein oder klicke auf einen gültigen Einladungslink.</p>
+            <input type="text" id="room-code-input" placeholder="z.B. stefan-duell" autocomplete="off">
+            <button class="btn" onclick="joinOnlineGame()">Verbinden</button>
+            <button class="back-btn" onclick="showScreen('mode-online-choice')">⬅ Zurück</button>
+        </div>
+
+        <!-- 6. KI SCHWIERIGKEIT WÄHLEN -->
+        <div id="mode-ai-choice" class="screen">
+            <h1>Gegen die KI</h1>
+            <p>Wähle die gewünschte Intelligenzstufe des Computergegners:</p>
+            <div class="menu-grid">
+                <button class="btn" onclick="startAIGame('easy')">🟢 Leicht (Zufällig)</button>
+                <button class="btn" onclick="startAIGame('medium')">🟡 Mittel (Taktisch)</button>
+                <button class="btn" onclick="startAIGame('hard')">🔴 Schwer (Minimax Meister)</button>
+            </div>
+            <button class="back-btn" onclick="showScreen('main-menu')">⬅ Zurück zum Hauptmenü</button>
+        </div>
+    </div>
+
+    <!-- 7. SEPARATE SPIELANSICHT (Füllt die Bildschirmbreite auf dem Handy perfekt aus) -->
+    <div id="game-screen" class="screen">
+        <div style="max-width: 500px; margin: 0 auto; width: 100%;">
+            <h1>4 GEWINNT</h1>
+            
+            <div class="game-info">
+                <div class="turn-indicator">
+                    <span class="mini-disc" id="turn-disc"></span>
+                    <span id="turn-text">Spieler 1 ist am Zug</span>
+                </div>
+                <button class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem; margin: 0;" onclick="confirmExitToMenu()">Hauptmenü</button>
+            </div>
+
+            <!-- Das 7x6 Spielfeld -->
+            <div class="board-container" id="game-board"></div>
+
+            <div class="status-msg" id="game-status-msg"></div>
+            <button class="btn" id="restart-btn" style="display:none;" onclick="restartCurrentGame()">Noch eine Runde</button>
+        </div>
+    </div>
+
+    <script>
+        // Spielkonstanten
+        const ROWS = 6;
+        const COLS = 7;
+        let board = [];
+        let currentPlayer = 1; // 1 = Rot (Du / Host), 2 = Gelb (Gegner / Gast / KI)
+        let myPlayerNumber = 1;
+        let gameActive = false;
+        let gameMode = 'local'; // 'local', 'ai', 'online-host', 'online-guest'
+        let aiDifficulty = 'medium';
+
+        // PeerJS Variablen
+        let peer = null;
+        let conn = null;
+        let generatedRoomCode = '';
+
+        // Bildschirmverwaltung
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+        }
+
+        // Sicherheitsabfrage, damit das laufende Spiel nicht aus Versehen geschlossen wird
+        function confirmExitToMenu() {
+            // Wenn ein aktives Spiel läuft oder man im Online-Warteraum ist, nachfragen
+            const isPlaying = gameActive && document.getElementById('game-screen').classList.contains('active');
+            const isHosting = document.getElementById('mode-online-host').classList.contains('active');
+
+            if (isPlaying || isHosting) {
+                if (confirm("Möchtest du das laufende Spiel wirklich verlassen? Der Spielstand geht dabei verloren.")) {
+                    resetToMenu();
+                }
+            } else {
+                resetToMenu();
+            }
+        }
+
+        function resetToMenu() {
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+            conn = null;
+            gameActive = false;
+            showScreen('main-menu');
+        }
+
+        // Automatische Erkennung beim Laden, ob ein ?room=... Parameter übergeben wurde
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomParam = urlParams.get('room');
+            if (roomParam) {
+                document.getElementById('room-code-input').value = roomParam;
+                showScreen('mode-online-join');
+                setTimeout(() => joinOnlineGame(), 500);
+            }
+        });
+
+        // ==========================================
+        // LOKALER MODUS
+        // ==========================================
+        function startLocalGame() {
+            gameMode = 'local';
+            currentPlayer = 1;
+            initBoard();
+            showScreen('game-screen');
+            updateGameInfo();
+        }
+
+        // ==========================================
+        // KI MODUS
+        // ==========================================
+        function startAIGame(difficulty) {
+            gameMode = 'ai';
+            aiDifficulty = difficulty;
+            currentPlayer = 1; // Mensch beginnt immer als Rot (1)
+            initBoard();
+            showScreen('game-screen');
+            updateGameInfo();
+        }
+
+        // ==========================================
+        // ONLINE MODUS (PEERJS MIT WUNSCH-CODE)
+        // ==========================================
+        function generateRandomCode() {
+            return '4g-' + Math.random().toString(36).substring(2, 8);
+        }
+
+        function prepareHostScreen() {
+            showScreen('mode-online-host-setup');
+            fillRandomCode();
+        }
+
+        function fillRandomCode() {
+            document.getElementById('custom-room-input').value = generateRandomCode();
+        }
+
+        function startHosting() {
+            const customCode = document.getElementById('custom-room-input').value.trim();
+            if (!customCode) {
+                alert('Bitte gib einen gültigen Raumcode ein.');
+                return;
+            }
+
+            generatedRoomCode = customCode;
+            showScreen('mode-online-host');
+            document.getElementById('host-status').innerText = 'Verbinde mit Server...';
+            
+            peer = new Peer(generatedRoomCode);
+
+            peer.on('open', (id) => {
+                // HIER SPÄTER DEINE ECHTE WEB-URL EINTRAGEN (z.B. von GitHub Pages oder Netlify)
+                const webBaseUrl = "https://dein-username.github.io/4gewinnt/"; 
+                
+                const baseUrl = window.location.protocol.startsWith('http') && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')
+                    ? window.location.origin + window.location.pathname 
+                    : webBaseUrl;
+
+                const fullLink = baseUrl + '?room=' + id;
+                document.getElementById('room-link-display').innerText = fullLink;
+                document.getElementById('host-status').innerText = 'Warte auf Mitspieler...';
+            });
+
+            peer.on('connection', (connection) => {
+                conn = connection;
+                setupConnectionListeners();
+                document.getElementById('host-status').innerText = 'Mitspieler verbunden! Starte Spiel...';
+                
+                gameMode = 'online-host';
+                myPlayerNumber = 1;
+                setTimeout(() => {
+                    initBoard();
+                    showScreen('game-screen');
+                    updateGameInfo();
+                }, 1000);
+            });
+
+            peer.on('error', (err) => {
+                console.error(err);
+                alert('Fehler: Dieser Raumcode ist eventuell schon vergeben. Bitte wähle einen anderen.');
+                showScreen('mode-online-host-setup');
+            });
+        }
+
+        function joinOnlineGame() {
+            const code = document.getElementById('room-code-input').value.trim();
+            if (!code) {
+                alert('Bitte gib einen gültigen Raumcode ein.');
+                return;
+            }
+
+            showScreen('game-screen');
+            document.getElementById('game-status-msg').innerText = 'Verbinde zum Raum...';
+            
+            peer = new Peer();
+
+            peer.on('open', () => {
+                conn = peer.connect(code);
+                setupConnectionListeners();
+            });
+
+            peer.on('error', (err) => {
+                console.error(err);
+                alert('Verbindung fehlgeschlagen. Überprüfe den Raumcode oder ob der Host online ist.');
+                showScreen('mode-online-join');
+            });
+        }
+
+        function setupConnectionListeners() {
+            conn.on('open', () => {
+                if (gameMode !== 'online-host') {
+                    gameMode = 'online-guest';
+                    myPlayerNumber = 2;
+                    initBoard();
+                    showScreen('game-screen');
+                    updateGameInfo();
+                }
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'move') {
+                    executeMove(data.col, false);
+                } else if (data.type === 'restart') {
+                    initBoard();
+                }
+            });
+
+            conn.on('close', () => {
+                alert('Der Mitspieler hat die Verbindung getrennt.');
+                resetToMenu();
+            });
+        }
+
+        function shareViaWhatsApp() {
+            const link = document.getElementById('room-link-display').innerText;
+            const text = encodeURIComponent("Lass uns eine Runde 4 Gewinnt spielen! Klicke hier, um sofort beizutreten: " + link);
+            window.open(`https://wa.me/?text=${text}`, '_blank');
+        }
+
+        function copyRoomLink() {
+            const linkText = document.getElementById('room-link-display').innerText;
+            navigator.clipboard.writeText(linkText).then(() => {
+                const btn = event.target;
+                const originalText = btn.innerText;
+                btn.innerText = '✅ Kopiert!';
+                setTimeout(() => { btn.innerText = originalText; }, 2000);
+            }).catch(err => {
+                console.error('Fehler beim Kopieren: ', err);
+            });
+        }
+
+        // ==========================================
+        // SPIELLOGIK & UI
+        // ==========================================
+        function initBoard() {
+            board = Array(ROWS).fill(null).map(() => Array(COLS).fill(0));
+            gameActive = true;
+            currentPlayer = 1;
+            document.getElementById('restart-btn').style.display = 'none';
+            document.getElementById('game-status-msg').innerText = '';
+            renderBoard();
+            updateGameInfo();
+        }
+
+        function renderBoard() {
+            const boardEl = document.getElementById('game-board');
+            boardEl.innerHTML = '';
+
+            for (let c = 0; c < COLS; c++) {
+                const colEl = document.createElement('div');
+                colEl.classList.add('column');
+                colEl.dataset.col = c;
+                colEl.addEventListener('click', () => handleColumnClick(c));
+
+                for (let r = 0; r < ROWS; r++) {
+                    const slotEl = document.createElement('div');
+                    slotEl.classList.add('slot');
+                    slotEl.dataset.row = r;
+                    slotEl.dataset.col = c;
+
+                    if (board[r][c] !== 0) {
+                        const discEl = document.createElement('div');
+                        discEl.classList.add('disc', board[r][c] === 1 ? 'p1' : 'p2');
+                        slotEl.appendChild(discEl);
+                    }
+
+                    colEl.appendChild(slotEl);
+                }
+                boardEl.appendChild(colEl);
+            }
+        }
+
+        function handleColumnClick(col) {
+            if (!gameActive) return;
+
+            if ((gameMode === 'online-host' || gameMode === 'online-guest') && currentPlayer !== myPlayerNumber) {
+                return;
+            }
+
+            if (gameMode === 'ai' && currentPlayer !== 1) {
+                return;
+            }
+
+            if (makeMove(col)) {
+                if ((gameMode === 'online-host' || gameMode === 'online-guest') && conn && conn.open) {
+                    conn.send({ type: 'move', col: col });
+                }
+
+                if (gameMode === 'ai' && gameActive && currentPlayer === 2) {
+                    setTimeout(makeAIMove, 500);
+                }
+            }
+        }
+
+        function makeMove(col) {
+            let targetRow = -1;
+            for (let r = ROWS - 1; r >= 0; r--) {
+                if (board[r][col] === 0) {
+                    targetRow = r;
+                    break;
+                }
+            }
+
+            if (targetRow === -1) return false;
+
+            board[targetRow][col] = currentPlayer;
+            renderBoard();
+
+            const winResult = checkWin(targetRow, col);
+            if (winResult) {
+                endGame(winResult);
+                return true;
+            }
+
+            if (isBoardFull()) {
+                endGame(null);
+                return true;
+            }
+
+            currentPlayer = currentPlayer === 1 ? 2 : 1;
+            updateGameInfo();
+            return true;
+        }
+
+        function executeMove(col) {
+            makeMove(col);
+        }
+
+        function updateGameInfo() {
+            const discEl = document.getElementById('turn-disc');
+            const textEl = document.getElementById('turn-text');
+
+            discEl.className = 'mini-disc ' + (currentPlayer === 1 ? 'p1' : 'p2');
+            
+            if (gameMode === 'online-host' || gameMode === 'online-guest') {
+                if (currentPlayer === myPlayerNumber) {
+                    textEl.innerText = "Du bist am Zug";
+                } else {
+                    textEl.innerText = "Mitspieler ist am Zug...";
+                }
+            } else if (gameMode === 'ai') {
+                if (currentPlayer === 1) {
+                    textEl.innerText = "Du bist am Zug (Rot)";
+                } else {
+                    textEl.innerText = "KI überlegt... (Gelb)";
+                }
+            } else {
+                textEl.innerText = currentPlayer === 1 ? "Spieler 1 ist am Zug (Rot)" : "Spieler 2 ist am Zug (Gelb)";
+            }
+        }
+
+        // ==========================================
+        // GEWINNERMITTLUNG
+        // ==========================================
+        function checkWin(row, col) {
+            const player = board[row][col];
+            const directions = [
+                {r: 0, c: 1},  // Horizontal
+                {r: 1, c: 0},  // Vertikal
+                {r: 1, c: 1},  // Diagonale \
+                {r: 1, c: -1}  // Diagonale /
+            ];
+
+            for (let d of directions) {
+                let winningCells = [{r: row, c: col}];
+
+                let i = 1;
+                while (true) {
+                    let nr = row + d.r * i;
+                    let nc = col + d.c * i;
+                    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc] === player) {
+                        winningCells.push({r: nr, c: nc});
+                        i++;
+                    } else {
+                        break;
+                    }
+                }
+
+                i = 1;
+                while (true) {
+                    let nr = row - d.r * i;
+                    let nc = col - d.c * i;
+                    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc] === player) {
+                        winningCells.push({r: nr, c: nc});
+                        i++;
+                    } else {
+                        break;
+                    }
+                }
+
+                if (winningCells.length >= 4) {
+                    return winningCells;
+                }
+            }
+            return null;
+        }
+
+        function isBoardFull() {
+            return board[0].every(cell => cell !== 0);
+        }
+
+        function endGame(winningCells) {
+            gameActive = false;
+            const statusMsg = document.getElementById('game-status-msg');
+            document.getElementById('restart-btn').style.display = 'inline-block';
+
+            if (winningCells) {
+                winningCells.forEach(cell => {
+                    const slot = document.querySelector(`.slot[data-row='${cell.r}'][data-col='${cell.c}']`);
+                    if (slot && slot.firstChild) {
+                        slot.firstChild.classList.add('winner');
+                    }
+                });
+
+                if (typeof confetti === 'function') {
+                    confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+                }
+
+                const winnerPlayer = board[winningCells[0].r][winningCells[0].c];
+                if (gameMode === 'online-host' || gameMode === 'online-guest') {
+                    statusMsg.innerText = (winnerPlayer === myPlayerNumber) ? "🎉 Du hast gewonnen!" : "😢 Mitspieler hat gewonnen!";
+                } else if (gameMode === 'ai') {
+                    statusMsg.innerText = (winnerPlayer === 1) ? "🎉 Du hast gewonnen!" : "🤖 Die KI hat gewonnen!";
+                } else {
+                    statusMsg.innerText = `🎉 Spieler ${winnerPlayer} hat gewonnen!`;
+                }
+            } else {
+                statusMsg.innerText = "🤝 Unentschieden!";
+            }
+        }
+
+        function restartCurrentGame() {
+            if ((gameMode === 'online-host' || gameMode === 'online-guest') && conn && conn.open) {
+                conn.send({ type: 'restart' });
+            }
+            initBoard();
+        }
+
+        // ==========================================
+        // KI LOGIK (Leicht, Mittel, Schwer / Minimax)
+        // ==========================================
+        function makeAIMove() {
+            if (!gameActive || currentPlayer !== 2) return;
+
+            let col;
+            if (aiDifficulty === 'easy') {
+                col = getEasyAIMove();
+            } else if (aiDifficulty === 'medium') {
+                col = getMediumAIMove();
+            } else {
+                col = getBestMinimaxMove(board, 4, true).col;
+            }
+
+            if (col !== undefined && col !== -1) {
+                makeMove(col);
+            }
+        }
+
+        function getValidColumns(b) {
+            let valid = [];
+            for (let c = 0; c < COLS; c++) {
+                if (b[0][c] === 0) valid.push(c);
+            }
+            return valid;
+        }
+
+        function getEasyAIMove() {
+            let valid = getValidColumns(board);
+            return valid[Math.floor(Math.random() * valid.length)];
+        }
+
+        function getMediumAIMove() {
+            let valid = getValidColumns(board);
+
+            for (let c of valid) {
+                let tempBoard = copyBoard(board);
+                let r = getLowestEmptyRow(tempBoard, c);
+                tempBoard[r][c] = 2;
+                if (checkWinOnBoard(tempBoard, r, c)) return c;
+            }
+
+            for (let c of valid) {
+                let tempBoard = copyBoard(board);
+                let r = getLowestEmptyRow(tempBoard, c);
+                tempBoard[r][c] = 1;
+                if (checkWinOnBoard(tempBoard, r, c)) return c;
+            }
+
+            return valid[Math.floor(Math.random() * valid.length)];
+        }
+
+        function copyBoard(b) {
+            return b.map(row => [...row]);
+        }
+
+        function getLowestEmptyRow(b, col) {
+            for (let r = ROWS - 1; r >= 0; r--) {
+                if (b[r][col] === 0) return r;
+            }
+            return -1;
+        }
+
+        function checkWinOnBoard(b, row, col) {
+            const player = b[row][col];
+            if (player === 0) return false;
+            const directions = [{r: 0, c: 1}, {r: 1, c: 0}, {r: 1, c: 1}, {r: 1, c: -1}];
+            for (let d of directions) {
+                let count = 1;
+                for (let i = 1; i < 4; i++) {
+                    let nr = row + d.r * i, nc = col + d.c * i;
+                    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && b[nr][nc] === player) count++;
+                    else break;
+                }
+                for (let i = 1; i < 4; i++) {
+                    let nr = row - d.r * i, nc = col - d.c * i;
+                    if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && b[nr][nc] === player) count++;
+                    else break;
+                }
+                if (count >= 4) return true;
+            }
+            return false;
+        }
+
+        function getBestMinimaxMove(b, depth, isMaximizing) {
+            let valid = getValidColumns(b);
+            if (depth === 0 || valid.length === 0) {
+                return { score: evaluateBoard(b) };
+            }
+
+            if (isMaximizing) {
+                let bestScore = -Infinity;
+                let bestCol = valid[0];
+                for (let c of valid) {
+                    let r = getLowestEmptyRow(b, c);
+                    b[r][c] = 2;
+                    if (checkWinOnBoard(b, r, c)) {
+                        b[r][c] = 0;
+                        return { col: c, score: 100000 };
+                    }
+                    let score = getBestMinimaxMove(b, depth - 1, false).score;
+                    b[r][c] = 0;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestCol = c;
+                    }
+                }
+                return { col: bestCol, score: bestScore };
+            } else {
+                let bestScore = Infinity;
+                let bestCol = valid[0];
+                for (let c of valid) {
+                    let r = getLowestEmptyRow(b, c);
+                    b[r][c] = 1;
+                    if (checkWinOnBoard(b, r, c)) {
+                        b[r][c] = 0;
+                        return { col: c, score: -100000 };
+                    }
+                    let score = getBestMinimaxMove(b, depth - 1, true).score;
+                    b[r][c] = 0;
+                    if (score < bestScore) {
+                        bestScore = score;
+                        bestCol = c;
+                    }
+                }
+                return { col: bestCol, score: bestScore };
+            }
+        }
+
+        function evaluateBoard(b) {
+            let score = 0;
+            let centerCols = b.map(row => row[3]);
+            let centerCount = centerCols.filter(cell => cell === 2).length;
+            score += centerCount * 10;
+            return score;
+        }
+    </script>
+</body>
+</html>

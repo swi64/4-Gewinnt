@@ -56,7 +56,6 @@
             text-align: center;
         }
 
-        /* Für die Spielansicht nutzen wir fast die komplette Handy-Breite aus */
         #game-screen.screen.active {
             max-width: 100%;
             width: 100%;
@@ -158,7 +157,6 @@
             border-color: var(--accent-orange);
         }
 
-        /* Spielstatus-Leiste */
         .game-info {
             display: flex;
             justify-content: space-between;
@@ -188,7 +186,6 @@
         .mini-disc.p1 { background-color: var(--player1); box-shadow: 0 0 8px var(--player1); }
         .mini-disc.p2 { background-color: var(--player2); box-shadow: 0 0 8px var(--player2); }
 
-        /* Spielfeld füllt die Handy-Breite optimal aus und hat größere Schlitze */
         .board-container {
             position: relative;
             background-color: var(--board-bg);
@@ -319,36 +316,21 @@
             </div>
         </div>
 
-        <!-- 2. ONLINE AUSWAHL (Hosten oder Beitreten) -->
+        <!-- 2. ONLINE AUSWAHL -->
         <div id="mode-online-choice" class="screen">
             <h1>Online-Duell</h1>
-            <p>Spiele in Echtzeit gegen Freunde – egal ob über WhatsApp, Direktlink oder Raumcode.</p>
+            <p>Spiele in Echtzeit über den festen Raum "sw4gewinnt" und WhatsApp.</p>
             <div class="menu-grid">
-                <button class="btn" onclick="prepareHostScreen()">🏠 Raum erstellen (Host)</button>
+                <button class="btn" onclick="prepareHostScreen()">🏠 Raum öffnen (Host)</button>
                 <button class="btn btn-secondary" onclick="showScreen('mode-online-join')">🔗 Raum beitreten</button>
             </div>
             <button class="back-btn" onclick="showScreen('main-menu')">⬅ Zurück zum Hauptmenü</button>
         </div>
 
-        <!-- 3. ONLINE RAUM ERSTELLEN & WUNSCH-CODE -->
-        <div id="mode-online-host-setup" class="screen">
-            <h1>Raum erstellen</h1>
-            <p>Wähle einen eigenen Raumcode oder generiere automatisch einen zufälligen Code:</p>
-            
-            <input type="text" id="custom-room-input" placeholder="z.B. stefan-duell" autocomplete="off">
-            
-            <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-bottom: 15px;">
-                <button class="btn" onclick="startHosting()">Raum öffnen</button>
-                <button class="btn btn-secondary" onclick="fillRandomCode()">🎲 Zufalls-Code</button>
-            </div>
-
-            <button class="back-btn" onclick="showScreen('mode-online-choice')">⬅ Zurück</button>
-        </div>
-
-        <!-- 4. ONLINE WARTERAUM & TEILEN -->
+        <!-- 3. ONLINE WARTERAUM & TEILEN -->
         <div id="mode-online-host" class="screen">
             <h1>Warte auf Mitspieler</h1>
-            <p>Teile den Link oder den Code mit deinem Mitspieler, um das Duell zu starten:</p>
+            <p>Teile den Link per WhatsApp, um das Duell im Raum <strong>sw4gewinnt</strong> zu starten:</p>
             
             <div class="link-box" id="room-link-display">Generiere Link...</div>
             
@@ -361,16 +343,16 @@
             <button class="back-btn" onclick="confirmExitToMenu()">Abbrechen</button>
         </div>
 
-        <!-- 5. ONLINE BEITRETEN -->
+        <!-- 4. ONLINE BEITRETEN -->
         <div id="mode-online-join" class="screen">
             <h1>Raum beitreten</h1>
-            <p>Gib den Raumcode ein oder klicke auf einen gültigen Einladungslink.</p>
-            <input type="text" id="room-code-input" placeholder="z.B. stefan-duell" autocomplete="off">
+            <p>Gib den Raumcode ein oder nutze den WhatsApp-Einladungslink.</p>
+            <input type="text" id="room-code-input" value="sw4gewinnt" autocomplete="off">
             <button class="btn" onclick="joinOnlineGame()">Verbinden</button>
             <button class="back-btn" onclick="showScreen('mode-online-choice')">⬅ Zurück</button>
         </div>
 
-        <!-- 6. KI SCHWIERIGKEIT WÄHLEN -->
+        <!-- 5. KI SCHWIERIGKEIT WÄHLEN -->
         <div id="mode-ai-choice" class="screen">
             <h1>Gegen die KI</h1>
             <p>Wähle die gewünschte Intelligenzstufe des Computergegners:</p>
@@ -383,7 +365,7 @@
         </div>
     </div>
 
-    <!-- 7. SEPARATE SPIELANSICHT (Füllt die Bildschirmbreite auf dem Handy perfekt aus) -->
+    <!-- 6. SEPARATE SPIELANSICHT -->
     <div id="game-screen" class="screen">
         <div style="max-width: 500px; margin: 0 auto; width: 100%;">
             <h1>4 GEWINNT</h1>
@@ -405,35 +387,92 @@
     </div>
 
     <script>
+        // Web Audio API Soundgenerator (Keine externen MP3s nötig!)
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // Sound 1: Kurzer Klopfton, wenn der Stein fällt
+        function playDropSound() {
+            try {
+                initAudio();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                
+                osc.type = 'sine';
+                // Tonhöhen-Abfall für den Aufprall-Effekt
+                osc.frequency.setValueAtTime(350, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.12);
+                
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.12);
+            } catch(e) { console.log(e); }
+        }
+
+        // Sound 2: Triumphale Sieg-Melodie
+        function playWinSound() {
+            try {
+                initAudio();
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, index) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, audioCtx.currentTime + index * 0.12);
+                    
+                    gain.gain.setValueAtTime(0, audioCtx.currentTime + index * 0.12);
+                    gain.gain.linearRampToValueAtTime(0.3, audioCtx.currentTime + index * 0.12 + 0.05);
+                    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + index * 0.12 + 0.4);
+                    
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    
+                    osc.start(audioCtx.currentTime + index * 0.12);
+                    osc.stop(audioCtx.currentTime + index * 0.12 + 0.4);
+                });
+            } catch(e) { console.log(e); }
+        }
+
         // Spielkonstanten
         const ROWS = 6;
         const COLS = 7;
         let board = [];
-        let currentPlayer = 1; // 1 = Rot (Du / Host), 2 = Gelb (Gegner / Gast / KI)
+        let currentPlayer = 1;
         let myPlayerNumber = 1;
         let gameActive = false;
-        let gameMode = 'local'; // 'local', 'ai', 'online-host', 'online-guest'
+        let gameMode = 'local';
         let aiDifficulty = 'medium';
 
-        // PeerJS Variablen
+        // PeerJS Variablen mit festem Wunsch-Raumcode
         let peer = null;
         let conn = null;
-        let generatedRoomCode = '';
+        const FIXED_ROOM_CODE = "sw4gewinnt";
 
-        // Bildschirmverwaltung
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
         }
 
-        // Sicherheitsabfrage, damit das laufende Spiel nicht aus Versehen geschlossen wird
         function confirmExitToMenu() {
-            // Wenn ein aktives Spiel läuft oder man im Online-Warteraum ist, nachfragen
             const isPlaying = gameActive && document.getElementById('game-screen').classList.contains('active');
             const isHosting = document.getElementById('mode-online-host').classList.contains('active');
 
             if (isPlaying || isHosting) {
-                if (confirm("Möchtest du das laufende Spiel wirklich verlassen? Der Spielstand geht dabei verloren.")) {
+                if (confirm("Möchtest du das laufende Spiel wirklich verlassen?")) {
                     resetToMenu();
                 }
             } else {
@@ -456,16 +495,18 @@
             const urlParams = new URLSearchParams(window.location.search);
             const roomParam = urlParams.get('room');
             if (roomParam) {
-                document.getElementById('room-code-input').value = roomParam;
+                const joinInput = document.getElementById('room-code-input');
+                if (joinInput) joinInput.value = roomParam;
                 showScreen('mode-online-join');
                 setTimeout(() => joinOnlineGame(), 500);
             }
         });
 
         // ==========================================
-        // LOKALER MODUS
+        // LOKALER & KI MODUS
         // ==========================================
         function startLocalGame() {
+            initAudio();
             gameMode = 'local';
             currentPlayer = 1;
             initBoard();
@@ -473,58 +514,45 @@
             updateGameInfo();
         }
 
-        // ==========================================
-        // KI MODUS
-        // ==========================================
         function startAIGame(difficulty) {
+            initAudio();
             gameMode = 'ai';
             aiDifficulty = difficulty;
-            currentPlayer = 1; // Mensch beginnt immer als Rot (1)
+            currentPlayer = 1;
             initBoard();
             showScreen('game-screen');
             updateGameInfo();
         }
 
         // ==========================================
-        // ONLINE MODUS (PEERJS MIT WUNSCH-CODE)
+        // ONLINE MODUS MIT FESTEM RAUMCODE "sw4gewinnt"
         // ==========================================
-        function generateRandomCode() {
-            return '4g-' + Math.random().toString(36).substring(2, 8);
-        }
-
         function prepareHostScreen() {
-            showScreen('mode-online-host-setup');
-            fillRandomCode();
-        }
-
-        function fillRandomCode() {
-            document.getElementById('custom-room-input').value = generateRandomCode();
+            initAudio();
+            startHosting();
         }
 
         function startHosting() {
-            const customCode = document.getElementById('custom-room-input').value.trim();
-            if (!customCode) {
-                alert('Bitte gib einen gültigen Raumcode ein.');
-                return;
+            generatedRoomCode = FIXED_ROOM_CODE;
+            showScreen('mode-online-host');
+            document.getElementById('host-status').innerText = 'Verbinde mit Raum "sw4gewinnt"...';
+            
+            if (window.peer) {
+                window.peer.destroy();
             }
 
-            generatedRoomCode = customCode;
-            showScreen('mode-online-host');
-            document.getElementById('host-status').innerText = 'Verbinde mit Server...';
-            
-            peer = new Peer(generatedRoomCode);
+            peer = new Peer(FIXED_ROOM_CODE);
+            window.peer = peer;
 
             peer.on('open', (id) => {
-                // HIER SPÄTER DEINE ECHTE WEB-URL EINTRAGEN (z.B. von GitHub Pages oder Netlify)
                 const webBaseUrl = "https://swi64.github.io/4-Gewinnt/"; 
-                
                 const baseUrl = window.location.protocol.startsWith('http') && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')
                     ? window.location.origin + window.location.pathname 
                     : webBaseUrl;
 
-                const fullLink = baseUrl + '?room=' + id;
+                const fullLink = baseUrl + '?room=' + FIXED_ROOM_CODE;
                 document.getElementById('room-link-display').innerText = fullLink;
-                document.getElementById('host-status').innerText = 'Warte auf Mitspieler...';
+                document.getElementById('host-status').innerText = 'Warte auf Mitspieler im Raum: ' + FIXED_ROOM_CODE;
             });
 
             peer.on('connection', (connection) => {
@@ -543,22 +571,28 @@
 
             peer.on('error', (err) => {
                 console.error(err);
-                alert('Fehler: Dieser Raumcode ist eventuell schon vergeben. Bitte wähle einen anderen.');
-                showScreen('mode-online-host-setup');
+                if (err.type === 'unavailable-id') {
+                    document.getElementById('host-status').innerText = 'Raum kurz belegt, verbinde neu...';
+                    setTimeout(() => { startHosting(); }, 1500);
+                } else {
+                    setTimeout(() => { startHosting(); }, 2000);
+                }
             });
         }
 
         function joinOnlineGame() {
-            const code = document.getElementById('room-code-input').value.trim();
-            if (!code) {
-                alert('Bitte gib einen gültigen Raumcode ein.');
-                return;
-            }
+            initAudio();
+            const code = document.getElementById('room-code-input').value.trim() || FIXED_ROOM_CODE;
 
             showScreen('game-screen');
             document.getElementById('game-status-msg').innerText = 'Verbinde zum Raum...';
             
+            if (window.peer) {
+                window.peer.destroy();
+            }
+
             peer = new Peer();
+            window.peer = peer;
 
             peer.on('open', () => {
                 conn = peer.connect(code);
@@ -567,7 +601,7 @@
 
             peer.on('error', (err) => {
                 console.error(err);
-                alert('Verbindung fehlgeschlagen. Überprüfe den Raumcode oder ob der Host online ist.');
+                alert('Verbindung fehlgeschlagen. Überprüfe, ob der Host online ist.');
                 showScreen('mode-online-join');
             });
         }
@@ -585,7 +619,7 @@
 
             conn.on('data', (data) => {
                 if (data.type === 'move') {
-                    executeMove(data.col, false);
+                    executeMove(data.col);
                 } else if (data.type === 'restart') {
                     initBoard();
                 }
@@ -690,6 +724,7 @@
             if (targetRow === -1) return false;
 
             board[targetRow][col] = currentPlayer;
+            playDropSound(); // Ton abspielen, wenn der Stein fällt
             renderBoard();
 
             const winResult = checkWin(targetRow, col);
@@ -735,9 +770,6 @@
             }
         }
 
-        // ==========================================
-        // GEWINNERMITTLUNG
-        // ==========================================
         function checkWin(row, col) {
             const player = board[row][col];
             const directions = [
@@ -757,9 +789,7 @@
                     if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc] === player) {
                         winningCells.push({r: nr, c: nc});
                         i++;
-                    } else {
-                        break;
-                    }
+                    } else { break; }
                 }
 
                 i = 1;
@@ -769,9 +799,7 @@
                     if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc] === player) {
                         winningCells.push({r: nr, c: nc});
                         i++;
-                    } else {
-                        break;
-                    }
+                    } else { break; }
                 }
 
                 if (winningCells.length >= 4) {
@@ -791,6 +819,7 @@
             document.getElementById('restart-btn').style.display = 'inline-block';
 
             if (winningCells) {
+                playWinSound(); // Triumphale Melodie beim Sieg!
                 winningCells.forEach(cell => {
                     const slot = document.querySelector(`.slot[data-row='${cell.r}'][data-col='${cell.c}']`);
                     if (slot && slot.firstChild) {
@@ -823,7 +852,7 @@
         }
 
         // ==========================================
-        // KI LOGIK (Leicht, Mittel, Schwer / Minimax)
+        // KI LOGIK
         // ==========================================
         function makeAIMove() {
             if (!gameActive || currentPlayer !== 2) return;
